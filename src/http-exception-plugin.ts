@@ -18,11 +18,14 @@ export const httpExceptionPlugin = () =>
         headers: { 'Content-Type': 'application/json' },
       });
     })
-    .onError(({ error, set }) => {
+    .onError({ as: 'scoped' }, ({ error, set }) => {
       if (error instanceof HttpException) {
+        set.headers['content-type'] = 'application/json; charset=utf-8'
         set.status = error.statusCode;
         return error.toBody();
       }
+      
       set.status = 500;
-      return { statusCode: 500, message: 'Internal server error' };
+      const message = error instanceof Error ? error.message : 'Internal server error';
+      return { statusCode: 500, message };
     });
