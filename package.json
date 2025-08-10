@@ -1,8 +1,22 @@
 {
   "name": "elysia-http-exception",
+  "version": "1.0.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "format": "prettier --write '**/*.ts' --ignore-path .gitignore"
+    "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --target bun --minify --external elysia && tsc",
+    "format": "prettier --write '**/*.ts' --ignore-path .gitignore",
+    "prepublishOnly": "bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest",
