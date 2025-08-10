@@ -1,22 +1,33 @@
 {
   "name": "elysia-http-exception",
-  "version": "1.0.0",
+  "description": "Elysia plugin for handling HTTP 4xx and 5xx errors with structured exception classes and automatic error responses",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codev911/elysia-http-exception"
+  },
+  "keywords": [
+    "elysia",
+    "http",
+    "exception",
+    "plugin"
+  ],
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+    "require": "./dist/index.js",
+    "import": "./dist/index.js",
+    "node": "./dist/index.js",
+    "default": "./dist/index.js"
   },
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --target bun --minify --external elysia && tsc",
-    "format": "prettier --write '**/*.ts' --ignore-path .gitignore",
-    "prepublishOnly": "bun run build"
+    "format": "prettier --write '**/*.ts' --ignore-path .gitignore"
   },
   "devDependencies": {
     "@types/bun": "latest",
