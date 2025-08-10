@@ -15,14 +15,14 @@ export class HttpException extends Error {
       message instanceof Error
         ? message.message
         : typeof message === 'string'
-        ? message
-        : defaultMsg;
+          ? message
+          : defaultMsg;
 
     super(finalMsg);
     this.name = new.target.name;
 
     this.statusCode = statusCode; // number
-    this.code = code;             // string e.g. "INTERNAL_SERVER_ERROR"
+    this.code = code; // string e.g. "INTERNAL_SERVER_ERROR"
 
     if (message && typeof message === 'object' && !(message instanceof Error)) {
       this.data = message; // custom object dikembalikan apa adanya di toBody()

@@ -37,5 +37,5 @@ export enum HttpError {
   INSUFFICIENT_STORAGE = '{"statusCode":507,"code":"INSUFFICIENT_STORAGE","message":"Insufficient Storage"}',
   LOOP_DETECTED = '{"statusCode":508,"code":"LOOP_DETECTED","message":"Loop Detected"}',
   NOT_EXTENDED = '{"statusCode":510,"code":"NOT_EXTENDED","message":"Not Extended"}',
-  NETWORK_AUTHENTICATION_REQUIRED = '{"statusCode":511,"code":"NETWORK_AUTHENTICATION_REQUIRED","message":"Network Authentication Required"}'
+  NETWORK_AUTHENTICATION_REQUIRED = '{"statusCode":511,"code":"NETWORK_AUTHENTICATION_REQUIRED","message":"Network Authentication Required"}',
 }
