@@ -1,0 +1,18 @@
+{
+  "name": "elysia-http-exception-example",
+  "version": "1.0.0",
+  "description": "Example project demonstrating all HTTP exception classes",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "bun run index.ts",
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "elysia": "^1.3.8",
+    "elysia-http-exception": "file:.."
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
