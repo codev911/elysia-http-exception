@@ -38,7 +38,8 @@ export const httpExceptionPlugin = () =>
 
         case 'VALIDATION':
         case 'PARSE': {
-          const { code: httpCode, statusCode, message } = JSON.parse(HttpError.BAD_REQUEST);
+          const { code: httpCode, statusCode } = JSON.parse(HttpError.BAD_REQUEST);
+          const message = 'Invalid request payload';
           set.status = parseInt(httpCode, 10);
           return { statusCode, message };
         }
