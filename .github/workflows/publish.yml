@@ -1,0 +1,424 @@
+name: 📦 Build & Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., patch, minor, major, or specific version like 1.2.3)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor  
+          - major
+          - prerelease
+      npm_tag:
+        description: 'NPM dist-tag (latest, beta, alpha, next)'
+        required: false
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - beta
+          - alpha
+          - next
+      dry_run:
+        description: 'Dry run (build without publishing)'
+        required: false
+        default: false
+        type: boolean
+
+# Ensure only one publish workflow runs at a time
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+jobs:
+  # Job 1: Pre-publish Checks
+  pre-checks:
+    name: 🔍 Pre-publish Checks
+    runs-on: ubuntu-latest
+    if: github.repository == 'codev911/elysia-http-exception'
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🧪 Run Full Test Suite
+        run: |
+          echo "Running comprehensive test suite before publish..."
+          bun test:unit
+          bun test:e2e
+          echo "✅ All tests passed"
+
+      - name: 🔨 Build Package
+        run: |
+          echo "Building package for production..."
+          bun run build
+          echo "✅ Build completed successfully"
+
+      - name: 📋 Validate Build Output
+        run: |
+          echo "Validating build artifacts..."
+          test -f dist/index.js || (echo "❌ Missing dist/index.js" && exit 1)
+          test -f dist/index.d.ts || (echo "❌ Missing dist/index.d.ts" && exit 1)
+          
+          # Check if main exports are present
+          node -e "
+            const pkg = require('./dist/index.js');
+            if (!pkg.httpExceptionPlugin) throw new Error('Missing httpExceptionPlugin export');
+            if (!pkg.HttpException) throw new Error('Missing HttpException export'); 
+            if (!pkg.BadRequestException) throw new Error('Missing BadRequestException export');
+            console.log('✅ All main exports are present');
+          "
+          
+          echo "✅ Build validation completed"
+
+      - name: 🏷️ Determine Version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            # Tag push
+            VERSION=${GITHUB_REF#refs/tags/v}
+            TAG="latest"
+            IS_PRERELEASE="false"
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            # GitHub release
+            VERSION=${{ github.event.release.tag_name }}
+            VERSION=${VERSION#v}
+            if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+              TAG="beta"
+              IS_PRERELEASE="true"
+            else
+              TAG="latest"
+              IS_PRERELEASE="false"
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual trigger
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            if [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              VERSION="${{ inputs.version }}"
+            else
+              # Use npm version to calculate new version
+              npm version --no-git-tag-version ${{ inputs.version }}
+              VERSION=$(node -p "require('./package.json').version")
+            fi
+            TAG="${{ inputs.npm_tag }}"
+            if [[ "$TAG" != "latest" ]]; then
+              IS_PRERELEASE="true"
+            else
+              IS_PRERELEASE="false"
+            fi
+          else
+            echo "❌ Unsupported trigger event"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT  
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          
+          echo "📋 Publishing version: $VERSION with tag: $TAG"
+
+  # Job 2: Publish to npm
+  publish-npm:
+    name: 📦 Publish to npm
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    if: github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run
+    
+    environment: 
+      name: npm
+      url: https://www.npmjs.com/package/elysia-http-exception
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Bun  
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 🔧 Setup Node.js for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Package
+        run: bun run build
+
+      - name: 📝 Update Package Version
+        run: |
+          npm version --no-git-tag-version ${{ needs.pre-checks.outputs.version }}
+          echo "✅ Package version updated to ${{ needs.pre-checks.outputs.version }}"
+
+      - name: 🔍 Pre-publish Dry Run
+        run: |
+          echo "Running npm publish dry run..."
+          npm publish --dry-run --tag ${{ needs.pre-checks.outputs.tag }}
+          echo "✅ Dry run completed successfully"
+
+      - name: 📤 Publish to npm
+        run: |
+          echo "Publishing to npm registry..."
+          npm publish --tag ${{ needs.pre-checks.outputs.tag }} --access public
+          echo "✅ Successfully published to npm"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 🏷️ Tag Latest Version
+        if: needs.pre-checks.outputs.tag == 'latest'
+        run: |
+          npm dist-tag add elysia-http-exception@${{ needs.pre-checks.outputs.version }} latest
+          echo "✅ Tagged as latest on npm"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Job 3: Publish to GitHub Packages  
+  publish-github:
+    name: 📦 Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    if: github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    environment:
+      name: github-packages
+      url: https://github.com/codev911/elysia-http-exception/packages
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 🔧 Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@codev911'
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Package
+        run: bun run build
+
+      - name: 📝 Update Package for GitHub Packages
+        run: |
+          # Update package.json for GitHub Packages
+          npm version --no-git-tag-version ${{ needs.pre-checks.outputs.version }}
+          
+          # Update name for GitHub packages
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@codev911/elysia-http-exception';
+            pkg.publishConfig = {
+              registry: 'https://npm.pkg.github.com',
+              access: 'public'
+            };
+            require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+          "
+          
+          echo "✅ Package configured for GitHub Packages"
+
+      - name: 📤 Publish to GitHub Packages
+        run: |
+          echo "Publishing to GitHub Packages..."
+          npm publish --tag ${{ needs.pre-checks.outputs.tag }}
+          echo "✅ Successfully published to GitHub Packages"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 4: Create GitHub Release
+  github-release:
+    name: 🚀 Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [pre-checks, publish-npm]
+    if: github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run && github.event_name != 'release'
+    
+    permissions:
+      contents: write
+      
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📋 Generate Release Notes
+        id: changelog
+        run: |
+          VERSION="${{ needs.pre-checks.outputs.version }}"
+          
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [[ -n "$LATEST_TAG" ]]; then
+            echo "Generating changelog from $LATEST_TAG to HEAD"
+            CHANGELOG=$(git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "No previous tags found, generating changelog from first commit"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## 🚀 What's New in v$VERSION
+          
+          ### 📋 Changes
+          $CHANGELOG
+          
+          ### 📦 Installation
+          \`\`\`bash
+          # Using bun (recommended)
+          bun add elysia-http-exception@$VERSION
+          
+          # Using npm
+          npm install elysia-http-exception@$VERSION
+          \`\`\`
+          
+          ### 📚 Documentation
+          - [README](https://github.com/codev911/elysia-http-exception#readme)
+          - [Examples](https://github.com/codev911/elysia-http-exception/tree/main/example)
+          - [npm Package](https://www.npmjs.com/package/elysia-http-exception)
+          
+          ### 🙏 Contributors
+          Thank you to all contributors who made this release possible!
+          EOF
+          
+          echo "release_notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.pre-checks.outputs.version }}
+          release_name: 🚀 Release v${{ needs.pre-checks.outputs.version }}
+          body_path: ${{ steps.changelog.outputs.release_notes_file }}
+          draft: false
+          prerelease: ${{ needs.pre-checks.outputs.is-prerelease }}
+
+  # Job 5: Post-publish Tasks
+  post-publish:
+    name: 📋 Post-publish Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-checks, publish-npm, publish-github, github-release]
+    if: always() && github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run
+    
+    steps:
+      - name: 📋 Publish Summary
+        run: |
+          echo "## 🎉 Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Published Version: **${{ needs.pre-checks.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏷️ Dist Tag: **${{ needs.pre-checks.outputs.tag }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.publish-npm.result }}" == "success" ]]; then
+            echo "✅ **npm Registry**: Successfully published" >> $GITHUB_STEP_SUMMARY
+            echo "   - 🔗 [View on npm](https://www.npmjs.com/package/elysia-http-exception/v/${{ needs.pre-checks.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **npm Registry**: Failed to publish" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.publish-github.result }}" == "success" ]]; then
+            echo "✅ **GitHub Packages**: Successfully published" >> $GITHUB_STEP_SUMMARY
+            echo "   - 🔗 [View on GitHub](https://github.com/codev911/elysia-http-exception/packages)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **GitHub Packages**: Failed to publish" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.github-release.result }}" == "success" ]]; then
+            echo "✅ **GitHub Release**: Successfully created" >> $GITHUB_STEP_SUMMARY
+            echo "   - 🔗 [View Release](https://github.com/codev911/elysia-http-exception/releases/tag/v${{ needs.pre-checks.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **GitHub Release**: Failed to create" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🛠️ Installation Command:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "bun add elysia-http-exception@${{ needs.pre-checks.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🎉 Success Notification
+        if: needs.publish-npm.result == 'success' && needs.publish-github.result == 'success'
+        run: |
+          echo "🎉 Successfully published elysia-http-exception v${{ needs.pre-checks.outputs.version }} to both npm and GitHub Packages!"
+          echo "📦 npm: https://www.npmjs.com/package/elysia-http-exception/v/${{ needs.pre-checks.outputs.version }}"
+          echo "📦 GitHub: https://github.com/codev911/elysia-http-exception/packages"
+
+      - name: ⚠️ Partial Success Warning
+        if: (needs.publish-npm.result == 'success') != (needs.publish-github.result == 'success')
+        run: |
+          echo "⚠️ Partial publish success - some registries failed"
+          echo "Please check the individual job results and consider manual intervention if needed."
+
+      - name: ❌ Publish Failed  
+        if: needs.publish-npm.result != 'success' && needs.publish-github.result != 'success'
+        run: |
+          echo "❌ Publish failed for both registries"
+          echo "Please check the logs and retry the publish process."
+          exit 1
+
+  # Job 6: Dry Run Summary (if enabled)
+  dry-run-summary:
+    name: 🧪 Dry Run Summary
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    if: inputs.dry_run && github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 📋 Dry Run Results
+        run: |
+          echo "## 🧪 Dry Run Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Version that would be published: **${{ needs.pre-checks.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏷️ Dist tag that would be used: **${{ needs.pre-checks.outputs.tag }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Pre-checks**: All validations passed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Build**: Package built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Tests**: All tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 **Ready for publish!** Disable dry run to proceed with actual publishing." >> $GITHUB_STEP_SUMMARY

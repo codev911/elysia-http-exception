@@ -1,0 +1,286 @@
+name: 🧪 Test & Quality Checks
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+# Cancel previous runs if a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Code Quality Checks
+  quality:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🎨 Check Code Formatting
+        run: bun run format --check
+
+      - name: 🔧 TypeScript Type Check
+        run: bun run build
+
+  # Job 2: Unit Tests
+  test:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event.pull_request.draft == false
+    
+    strategy:
+      matrix:
+        bun-version: [latest]
+        # Add more versions if needed: [1.0.0, latest]
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun ${{ matrix.bun-version }}
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ matrix.bun-version }}
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🧪 Run Unit Tests
+        run: bun test:unit
+
+      - name: 📊 Generate Test Coverage
+        run: bun test:coverage
+
+      - name: 📤 Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          file: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # Job 3: E2E Tests
+  e2e:
+    name: 🎯 E2E Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🎯 Run E2E Tests
+        run: bun test:e2e
+
+  # Job 4: Example Tests
+  example:
+    name: 🚀 Example Tests
+    runs-on: ubuntu-latest
+    needs: [test, e2e]
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Root Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Plugin
+        run: bun run build
+
+      - name: 📦 Install Example Dependencies
+        working-directory: ./example
+        run: bun install
+
+      - name: 🧪 Test Example - Throw Pattern
+        working-directory: ./example
+        run: |
+          timeout 10s bun run example-throw.ts &
+          sleep 3
+          curl -f http://localhost:3000/ || exit 1
+          curl -f http://localhost:3000/404 && exit 1 || true
+          curl -f http://localhost:3000/500 && exit 1 || true
+          echo "✅ Example throw tests passed"
+
+      - name: 🧪 Test Example - Decorator Pattern  
+        working-directory: ./example
+        run: |
+          timeout 10s bun run example-decorator.ts &
+          sleep 3
+          curl -f http://localhost:3001/ || exit 1
+          curl -f http://localhost:3001/decorator/404 && exit 1 || true
+          curl -f http://localhost:3001/decorator/500 && exit 1 || true
+          echo "✅ Example decorator tests passed"
+
+  # Job 5: Build Test
+  build:
+    name: 🔨 Build Test
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Package
+        run: bun run build
+
+      - name: 📋 Check Build Output
+        run: |
+          echo "Checking build output..."
+          ls -la dist/
+          test -f dist/index.js || (echo "❌ Missing dist/index.js" && exit 1)
+          test -f dist/index.d.ts || (echo "❌ Missing dist/index.d.ts" && exit 1)
+          echo "✅ Build output looks good"
+
+      - name: 📦 Test Package Installation
+        run: |
+          echo "Testing package installation..."
+          npm pack
+          mkdir test-install && cd test-install
+          npm init -y
+          npm install ../elysia-http-exception-*.tgz
+          echo "✅ Package installation test passed"
+
+  # Job 6: Security Audit
+  security:
+    name: 🛡️ Security Audit
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 📦 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🛡️ Run Security Audit
+        run: |
+          # Check for known vulnerabilities
+          if command -v npm &> /dev/null; then
+            npm audit --audit-level=high
+          else
+            echo "⚠️ npm not available, skipping audit"
+          fi
+
+  # Job 7: Results Summary
+  results:
+    name: 📋 Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [quality, test, e2e, example, build, security]
+    if: always() && github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📋 Check Results
+        run: |
+          echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.quality.result }}" == "success" ]]; then
+            echo "✅ **Code Quality**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Code Quality**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.test.result }}" == "success" ]]; then
+            echo "✅ **Unit Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Unit Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.e2e.result }}" == "success" ]]; then
+            echo "✅ **E2E Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **E2E Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.example.result }}" == "success" ]]; then
+            echo "✅ **Example Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Example Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ **Build**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Build**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.security.result }}" == "success" ]]; then
+            echo "✅ **Security**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Security**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Overall Status**: ${{ (needs.quality.result == 'success' && needs.test.result == 'success' && needs.e2e.result == 'success' && needs.example.result == 'success' && needs.build.result == 'success') && '✅ All Checks Passed' || '❌ Some Checks Failed' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: ✅ All Checks Passed
+        if: needs.quality.result == 'success' && needs.test.result == 'success' && needs.e2e.result == 'success' && needs.example.result == 'success' && needs.build.result == 'success'
+        run: echo "🎉 All quality checks passed! Ready for merge."
+
+      - name: ❌ Some Checks Failed
+        if: needs.quality.result != 'success' || needs.test.result != 'success' || needs.e2e.result != 'success' || needs.example.result != 'success' || needs.build.result != 'success'
+        run: |
+          echo "❌ Some checks failed. Please review the failed jobs and fix the issues."
+          exit 1
