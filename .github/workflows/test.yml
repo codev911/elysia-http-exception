@@ -44,10 +44,14 @@ jobs:
       - name: 📦 Install Dependencies
         run: bun install --frozen-lockfile
 
+      - name: 📦 Install Example Dependencies
+        working-directory: ./example
+        run: bun install --frozen-lockfile
+
       - name: 🎨 Check Code Formatting
         run: bun run format --check
 
-      - name: 🔧 TypeScript Type Check
+      - name: 🔨 Build Package
         run: bun run build
 
   # Job 2: Unit Tests
@@ -73,6 +77,9 @@ jobs:
 
       - name: 📦 Install Dependencies
         run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Package
+        run: bun run build
 
       - name: 🧪 Run Unit Tests
         run: bun test:unit
@@ -107,6 +114,9 @@ jobs:
 
       - name: 📦 Install Dependencies
         run: bun install --frozen-lockfile
+
+      - name: 🔨 Build Package
+        run: bun run build
 
       - name: 🎯 Run E2E Tests
         run: bun test:e2e
@@ -190,10 +200,10 @@ jobs:
       - name: 📦 Test Package Installation
         run: |
           echo "Testing package installation..."
-          npm pack
+          bun pack
           mkdir test-install && cd test-install
-          npm init -y
-          npm install ../elysia-http-exception-*.tgz
+          bun init -y
+          bun add ../elysia-http-exception-*.tgz
           echo "✅ Package installation test passed"
 
   # Job 6: Security Audit

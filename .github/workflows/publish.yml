@@ -69,18 +69,18 @@ jobs:
       - name: 📦 Install Dependencies
         run: bun install --frozen-lockfile
 
+      - name: 🔨 Build Package
+        run: |
+          echo "Building package for production..."
+          bun run build
+          echo "✅ Build completed successfully"
+
       - name: 🧪 Run Full Test Suite
         run: |
           echo "Running comprehensive test suite before publish..."
           bun test:unit
           bun test:e2e
           echo "✅ All tests passed"
-
-      - name: 🔨 Build Package
-        run: |
-          echo "Building package for production..."
-          bun run build
-          echo "✅ Build completed successfully"
 
       - name: 📋 Validate Build Output
         run: |
@@ -167,12 +167,6 @@ jobs:
         with:
           bun-version: latest
 
-      - name: 🔧 Setup Node.js for npm
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-
       - name: 📦 Install Dependencies
         run: bun install --frozen-lockfile
 
@@ -181,19 +175,32 @@ jobs:
 
       - name: 📝 Update Package Version
         run: |
-          npm version --no-git-tag-version ${{ needs.pre-checks.outputs.version }}
-          echo "✅ Package version updated to ${{ needs.pre-checks.outputs.version }}"
+          # Update package.json version using Node
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${{ needs.pre-checks.outputs.version }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            console.log('✅ Package version updated to ${{ needs.pre-checks.outputs.version }}');
+          "
 
       - name: 🔍 Pre-publish Dry Run
         run: |
-          echo "Running npm publish dry run..."
-          npm publish --dry-run --tag ${{ needs.pre-checks.outputs.tag }}
+          echo "Running publish dry run..."
+          # Create .npmrc for authentication
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          # Use bun to create tarball
+          bun pack
           echo "✅ Dry run completed successfully"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 📤 Publish to npm
         run: |
           echo "Publishing to npm registry..."
-          npm publish --tag ${{ needs.pre-checks.outputs.tag }} --access public
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          # Use npx for publishing since bun publish is experimental
+          npx npm@latest publish --tag ${{ needs.pre-checks.outputs.tag }} --access public
           echo "✅ Successfully published to npm"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -201,7 +208,8 @@ jobs:
       - name: 🏷️ Tag Latest Version
         if: needs.pre-checks.outputs.tag == 'latest'
         run: |
-          npm dist-tag add elysia-http-exception@${{ needs.pre-checks.outputs.version }} latest
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          npx npm@latest dist-tag add elysia-http-exception@${{ needs.pre-checks.outputs.version }} latest
           echo "✅ Tagged as latest on npm"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
