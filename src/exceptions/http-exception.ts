@@ -8,7 +8,7 @@ export class HttpException extends Error {
   public readonly data?: unknown;
   public readonly isHttpException = true;
 
-  constructor(httpError: HttpError, message?: string | object | Error) {
+  constructor(httpError: HttpError, message?: string | object | Error | unknown) {
     const { statusCode, code, message: defaultMsg } = JSON.parse(httpError) as Payload;
 
     const finalMsg =
