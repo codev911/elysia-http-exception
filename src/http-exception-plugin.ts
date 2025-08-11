@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
 import { HttpException } from './exceptions/http-exception';
+import { HttpError } from './types/http-error';
 
 export const httpExceptionPlugin = () =>
   new Elysia({ name: 'elysia-http-exception' })
@@ -18,14 +19,17 @@ export const httpExceptionPlugin = () =>
         headers: { 'Content-Type': 'application/json' },
       });
     })
-    .onError({ as: 'scoped' }, ({ error, set }) => {
+    .onError({ as: 'scoped' }, ({ code, error, set }) => {
       if (error instanceof HttpException) {
-        set.headers['content-type'] = 'application/json; charset=utf-8'
+        set.headers['content-type'] = 'application/json; charset=utf-8';
         set.status = error.statusCode;
         return error.toBody();
       }
-      
-      set.status = 500;
-      const message = error instanceof Error ? error.message : 'Internal server error';
-      return { statusCode: 500, message };
+
+      if (code === 'NOT_FOUND') {
+        const { code: httpCode, statusCode, message } = JSON.parse(HttpError.NOT_FOUND);
+        set.headers['content-type'] = 'application/json; charset=utf-8';
+        set.status = parseInt(httpCode, 10);
+        return { statusCode, message };
+      }
     });

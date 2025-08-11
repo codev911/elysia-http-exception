@@ -107,7 +107,9 @@ const app = new Elysia()
     throw new MisdirectedRequestException('Request was misdirected');
   })
   .get('/422', () => {
-    throw new UnprocessableEntityException('The request was well-formed but contains semantic errors');
+    throw new UnprocessableEntityException(
+      'The request was well-formed but contains semantic errors',
+    );
   })
   .get('/423', () => {
     throw new LockedException('The resource is locked');
@@ -175,9 +177,9 @@ const app = new Elysia()
       error: 'VALIDATION_FAILED',
       details: {
         field: 'email',
-        message: 'Invalid email format'
+        message: 'Invalid email format',
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   })
 
@@ -193,50 +195,50 @@ const app = new Elysia()
   // Practical example - User management
   .get('/users/:id', ({ params }) => {
     const userId = parseInt(params.id);
-    
+
     if (isNaN(userId)) {
       throw new BadRequestException('User ID must be a valid number');
     }
-    
+
     if (userId < 1) {
       throw new BadRequestException('User ID must be positive');
     }
-    
+
     if (userId === 404) {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
-    
+
     if (userId === 403) {
       throw new ForbiddenException('You do not have permission to view this user');
     }
-    
+
     return { id: userId, name: `User ${userId}`, email: `user${userId}@example.com` };
   })
 
   // API rate limiting example
   .get('/api/data', ({ request }) => {
     const rateLimitExceeded = Math.random() > 0.7; // Simulate rate limiting
-    
+
     if (rateLimitExceeded) {
       throw new TooManyRequestsException({
         message: 'Rate limit exceeded',
         retryAfter: 60,
         limit: 100,
-        remaining: 0
+        remaining: 0,
       });
     }
-    
+
     return { data: 'Some API data', timestamp: Date.now() };
   })
 
   // Database connection example
   .get('/database/status', () => {
     const dbConnected = Math.random() > 0.3; // Simulate database connection
-    
+
     if (!dbConnected) {
       throw new ServiceUnavailableException('Database connection failed - please try again later');
     }
-    
+
     return { status: 'Database is healthy', connections: 25 };
   })
 
