@@ -26,10 +26,40 @@ export const httpExceptionPlugin = () =>
         return error.toBody();
       }
 
-      if (code === 'NOT_FOUND') {
-        const { code: httpCode, statusCode, message } = JSON.parse(HttpError.NOT_FOUND);
-        set.headers['content-type'] = 'application/json; charset=utf-8';
-        set.status = parseInt(httpCode, 10);
-        return { statusCode, message };
+      set.headers['content-type'] = 'application/json; charset=utf-8';
+
+      switch (code) {
+        case 'INVALID_COOKIE_SIGNATURE': {
+          const { code: httpCode, statusCode } = JSON.parse(HttpError.BAD_REQUEST);
+          const message = 'Invalid cookie signature';
+          set.status = parseInt(httpCode, 10);
+          return { statusCode, message };
+        }
+
+        case 'VALIDATION':
+        case 'PARSE': {
+          const { code: httpCode, statusCode, message } = JSON.parse(HttpError.BAD_REQUEST);
+          set.status = parseInt(httpCode, 10);
+          return { statusCode, message };
+        }
+
+        case 'NOT_FOUND': {
+          const { code: httpCode, statusCode, message } = JSON.parse(HttpError.NOT_FOUND);
+          set.status = parseInt(httpCode, 10);
+          return { statusCode, message };
+        }
+
+        case 'INVALID_FILE_TYPE': {
+          const { code: httpCode, statusCode } = JSON.parse(HttpError.UNSUPPORTED_MEDIA_TYPE);
+          const message = 'Invalid file type';
+          set.status = parseInt(httpCode, 10);
+          return { statusCode, message };
+        }
+
+        default: {
+          const message = error instanceof Error ? error.message : 'Internal server error';
+          set.status = 500;
+          return { statusCode: 500, message };
+        }
       }
     });
