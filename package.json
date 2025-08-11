@@ -28,6 +28,7 @@
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --target bun --minify --external elysia && tsc",
     "format": "prettier --write '**/*.ts' --ignore-path .gitignore",
+    "pretest": "bun install && bun run build && cd example && bun install",
     "test": "bun test",
     "test:unit": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e",
