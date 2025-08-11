@@ -30,30 +30,30 @@ export const httpExceptionPlugin = () =>
 
       switch (code) {
         case 'INVALID_COOKIE_SIGNATURE': {
-          const { code: httpCode, statusCode } = JSON.parse(HttpError.BAD_REQUEST);
+          const { statusCode } = JSON.parse(HttpError.BAD_REQUEST);
           const message = 'Invalid cookie signature';
-          set.status = parseInt(httpCode, 10);
+          set.status = statusCode;
           return { statusCode, message };
         }
 
         case 'VALIDATION':
         case 'PARSE': {
-          const { code: httpCode, statusCode } = JSON.parse(HttpError.BAD_REQUEST);
+          const { statusCode } = JSON.parse(HttpError.BAD_REQUEST);
           const message = 'Invalid request payload';
-          set.status = parseInt(httpCode, 10);
+          set.status = statusCode;
           return { statusCode, message };
         }
 
         case 'NOT_FOUND': {
-          const { code: httpCode, statusCode, message } = JSON.parse(HttpError.NOT_FOUND);
-          set.status = parseInt(httpCode, 10);
+          const { statusCode, message } = JSON.parse(HttpError.NOT_FOUND);
+          set.status = statusCode;
           return { statusCode, message };
         }
 
         case 'INVALID_FILE_TYPE': {
-          const { code: httpCode, statusCode } = JSON.parse(HttpError.UNSUPPORTED_MEDIA_TYPE);
+          const { statusCode } = JSON.parse(HttpError.UNSUPPORTED_MEDIA_TYPE);
           const message = 'Invalid file type';
-          set.status = parseInt(httpCode, 10);
+          set.status = statusCode;
           return { statusCode, message };
         }
 
