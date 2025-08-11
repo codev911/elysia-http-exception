@@ -75,6 +75,10 @@ jobs:
           bun run build
           echo "✅ Build completed successfully"
 
+      - name: 📦 Install Example Dependencies
+        working-directory: ./example
+        run: bun install --frozen-lockfile
+
       - name: 🧪 Run Full Test Suite
         run: |
           echo "Running comprehensive test suite before publish..."
@@ -189,8 +193,8 @@ jobs:
           echo "Running publish dry run..."
           # Create .npmrc for authentication
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-          # Use bun to create tarball
-          bun pack
+          # Use npm to create tarball and test
+          npm pack
           echo "✅ Dry run completed successfully"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
