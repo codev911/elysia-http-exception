@@ -27,7 +27,12 @@
   ],
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --target bun --minify --external elysia && tsc",
-    "format": "prettier --write '**/*.ts' --ignore-path .gitignore"
+    "format": "prettier --write '**/*.ts' --ignore-path .gitignore",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "test:e2e": "bun test tests/e2e",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -25,5 +25,5 @@
     "outDir": "dist",
     "types": ["bun-types"]
   },
-  "exclude": ["dist", "example", "test"]
+  "exclude": ["dist", "example", "tests"]
 }
