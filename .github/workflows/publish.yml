@@ -215,74 +215,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # Job 3: Publish to GitHub Packages  
-  publish-github:
-    name: 📦 Publish to GitHub Packages
-    runs-on: ubuntu-latest
-    needs: [pre-checks, publish-npm]
-    if: github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    environment:
-      name: github-packages
-      url: https://github.com/codev911/elysia-http-exception/packages
-    
-    steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: 🔧 Setup Node.js for GitHub Packages
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@codev911'
-
-      - name: 📦 Install Dependencies
-        run: bun install --frozen-lockfile
-
-      - name: 🔨 Build Package
-        run: bun run build
-
-      - name: 📝 Update Package for GitHub Packages
-        run: |
-          # Update package.json for GitHub Packages
-          npm version --no-git-tag-version ${{ needs.pre-checks.outputs.version }}
-          
-          # Update name for GitHub packages
-          node -e "
-            const pkg = require('./package.json');
-            pkg.name = '@codev911/elysia-http-exception';
-            pkg.publishConfig = {
-              registry: 'https://npm.pkg.github.com',
-              access: 'public'
-            };
-            require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-          "
-          
-          echo "✅ Package configured for GitHub Packages"
-
-      - name: 📤 Publish to GitHub Packages
-        run: |
-          echo "Publishing to GitHub Packages..."
-          npm publish --tag ${{ needs.pre-checks.outputs.tag }}
-          echo "✅ Successfully published to GitHub Packages"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Job 4: Post-publish Tasks
+  # Job 3: Post-publish Tasks
   post-publish:
     name: 📋 Post-publish Tasks
     runs-on: ubuntu-latest
-    needs: [pre-checks, publish-npm, publish-github]
+    needs: [pre-checks, publish-npm]
     if: always() && github.repository == 'codev911/elysia-http-exception' && !inputs.dry_run
     
     steps:
@@ -301,13 +238,6 @@ jobs:
             echo "❌ **npm Registry**: Failed to publish" >> $GITHUB_STEP_SUMMARY
           fi
           
-          if [[ "${{ needs.publish-github.result }}" == "success" ]]; then
-            echo "✅ **GitHub Packages**: Successfully published" >> $GITHUB_STEP_SUMMARY
-            echo "   - 🔗 [View on GitHub](https://github.com/codev911/elysia-http-exception/packages)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **GitHub Packages**: Failed to publish" >> $GITHUB_STEP_SUMMARY
-          fi
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🛠️ Installation Command:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
@@ -315,22 +245,15 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: 🎉 Success Notification
-        if: needs.publish-npm.result == 'success' && needs.publish-github.result == 'success'
+        if: needs.publish-npm.result == 'success'
         run: |
-          echo "🎉 Successfully published elysia-http-exception v${{ needs.pre-checks.outputs.version }} to both npm and GitHub Packages!"
+          echo "🎉 Successfully published elysia-http-exception v${{ needs.pre-checks.outputs.version }} to npm!"
           echo "📦 npm: https://www.npmjs.com/package/elysia-http-exception/v/${{ needs.pre-checks.outputs.version }}"
-          echo "📦 GitHub: https://github.com/codev911/elysia-http-exception/packages"
-
-      - name: ⚠️ Partial Success Warning
-        if: (needs.publish-npm.result == 'success') != (needs.publish-github.result == 'success')
-        run: |
-          echo "⚠️ Partial publish success - some registries failed"
-          echo "Please check the individual job results and consider manual intervention if needed."
 
       - name: ❌ Publish Failed  
-        if: needs.publish-npm.result != 'success' && needs.publish-github.result != 'success'
+        if: needs.publish-npm.result != 'success'
         run: |
-          echo "❌ Publish failed for both registries"
+          echo "❌ npm publish failed"
           echo "Please check the logs and retry the publish process."
           exit 1
 

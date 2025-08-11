@@ -1,7 +1,7 @@
 {
   "name": "elysia-http-exception",
   "description": "Elysia plugin for handling HTTP 4xx and 5xx errors with structured exception classes and automatic error responses",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "repository": {
     "type": "git",
     "url": "https://github.com/codev911/elysia-http-exception"
