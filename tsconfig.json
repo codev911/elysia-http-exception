@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "esnext",
+    "target": "ES2022",
+    "module": "ESNext",
     "moduleDetection": "force",
     "jsx": "preserve",
     "moduleResolution": "bundler",
@@ -23,7 +23,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
-    "types": ["bun-types"]
+    "types": ["bun"]
   },
   "exclude": ["dist", "example", "tests"]
 }
